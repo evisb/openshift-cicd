@@ -1,0 +1,15 @@
+- name: delete project openshift-tasks-dev
+  shell: oc delete project openshift-tasks-dev -n openshift-tasks-dev
+  ignore_errors: true
+
+- name: delete project openshift-tasks-prod
+  shell: oc delete project openshift-tasks-prod -n openshift-tasks-prod
+  ignore_errors: true
+
+- name: delete template tasks-dev
+  shell: oc delete template tasks-dev  -n openshift
+  ignore_errors: true
+
+- name: delete template tasks-prod
+  shell: oc delete template tasks-prod  -n openshift
+  ignore_errors: true

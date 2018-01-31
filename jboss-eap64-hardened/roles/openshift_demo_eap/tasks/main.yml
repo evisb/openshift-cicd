@@ -1,0 +1,10 @@
+- block:
+    - include: create.yml
+      tags: ["ose3-hardened-eap64"]
+  when: mode=="create" or mode=="reset"
+
+
+- block:
+    - include: destroy.yml
+      tags: ["ose3-hardened-eap64"]
+  when: mode=="destroy"

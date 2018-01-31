@@ -1,0 +1,7 @@
+#
+# GitTrigger for tasks app:
+#
+# To be placed into gogs container as
+# /var/lib/git/openshift-apps.git/hooks/post-receive
+echo "Triggering OSE build via webhook...."
+curl --silent --insecure --request POST -H "Content-Type: application/json" https://{{ ocp_openshift_dns_domain }}/oapi/v1/namespaces/openshift-tasks-dev/buildconfigs/tasks/webhooks/secret/generic

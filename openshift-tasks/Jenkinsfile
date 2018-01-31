@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: BuildConfig
+metadata:
+  name: openshift-tasks-pipeline
+spec:
+  strategy:
+    jenkinsPipelineStrategy:
+        jenkinsfile: |-
+          node {
+              stage('BuildAndDeployToDev') {
+                  sh "oc process openshift//tasks-dev | oc apply -f - -n openshift-tasks-dev"
+                  openshiftBuild(buildConfig: 'tasks', namespace: 'openshift-tasks-dev', showBuildLogs: 'true')
+              }
+
+              stage('VerifyDeployment') {
+                  openshiftVerifyBuild(buildConfig: 'tasks', checkForTriggeredDeployments: 'true', namespace: 'openshift-tasks-dev')
+                  openshiftVerifyDeployment(deploymentConfig: 'tasks', namespace: 'openshift-tasks-dev')
+              }
+
+              stage('RunTests') {
+              }
+
+              stage('ApproveToProd') {
+                input "GO for Production?"
+              }
+
+              stage("Initiate Prod Deployment") {
+                openshiftTag srcStream: 'tasks', srcTag: 'latest', destinationStream: 'tasks', destinationTag: 'prod', namespace: 'openshift-tasks-dev'
+              }
+
+              stage("Verify Prod Deployment") {
+                sh "oc process openshift//tasks-prod | oc apply -f - -n openshift-tasks-prod"
+                openshiftVerifyDeployment deploymentConfig: 'tasks', namespace: 'openshift-tasks-prod'
+              }
+          }
+
+    type: JenkinsPipeline
+

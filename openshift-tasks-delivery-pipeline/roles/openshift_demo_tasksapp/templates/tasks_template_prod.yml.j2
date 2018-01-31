@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: tasks-prod
+  annotations:
+    tags: instant-app,javaee
+    iconClass: icon-jboss
+    description: |
+      Openshift Tasks is an application that demonstrates how
+      to build modern applications using JBoss web technologies
+
+objects:
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    name: tasks
+  spec:
+    replicas: 3
+    selector:
+      deploymentConfig: tasks
+    template:
+      metadata:
+        labels:
+          deploymentConfig: tasks
+        name: tasks
+      spec:
+        containers:
+        - name: tasks
+          image: tasks
+          ports:
+          - name: http
+            containerPort: 8080
+          - name: jolokia
+            containerPort: 8778
+          readinessProbe:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - /opt/eap/bin/readinessProbe.sh
+          env:
+          - name: JAVA_OPTS
+            value: "-Xmx512m -XX:MaxPermSize=256m -Djava.net.preferIPv4Stack=true -Djboss.modules.system.pkgs=org.jboss.logmanager -Djava.awt.headless=true -Djboss.modules.policy-permissions=true"
+    triggers:
+    - type: ConfigChange
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames:
+        - tasks
+        from:
+          kind: ImageStreamTag
+          name: tasks:prod
+          namespace: openshift-tasks-dev
+
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: tasks
+  spec:
+    ports:
+    - name: http
+      port: 8080
+    selector:
+      deploymentConfig: tasks
+
+- kind: Route
+  apiVersion: v1
+  metadata:
+    name: tasks
+  spec:
+    to:
+      name: tasks

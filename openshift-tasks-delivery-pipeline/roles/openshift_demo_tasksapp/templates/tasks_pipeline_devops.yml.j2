@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: BuildConfig
+metadata:
+  name: openshift-tasks-pipeline
+spec:
+  strategy:
+    jenkinsPipelineStrategy:
+        jenkinsfile: |-
+          node {
+              stage('BuildAndDeployToDev') {
+                  sh "oc delete all -l existingdevdepl -n openshift-tasks-dev"
+                  sh "oc new-app --template tasks-dev -n openshift-tasks-dev --labels=existingdevdepl=true"
+                  openshiftBuild(buildConfig: 'tasks', namespace: 'openshift-tasks-dev', showBuildLogs: 'true')
+              }
+
+              stage('VerifyDeployment') {
+                  openshiftVerifyBuild(buildConfig: 'tasks', checkForTriggeredDeployments: 'true', namespace: 'openshift-tasks-dev')
+                  openshiftVerifyDeployment(deploymentConfig: 'tasks', namespace: 'openshift-tasks-dev')
+              }
+
+              stage('RunTests') {
+              }
+
+              stage('ApproveToProd') {
+                input "GO for Production?"
+              }
+
+              stage("Initiate Prod Deployment") {
+                sh "oc delete all -l existingproddepl -n openshift-tasks-prod"
+                sh "oc new-app --template tasks-prod -n openshift-tasks-prod --labels=existingproddepl=true"
+                openshiftTag srcStream: 'tasks', srcTag: 'latest', destinationStream: 'tasks', destinationTag: 'prod', namespace: 'openshift-tasks-dev'
+              }
+
+              stage("Verify Prod Deployment") {
+                  openshiftVerifyDeployment deploymentConfig: 'tasks', namespace: 'openshift-tasks-prod'
+              }
+          }
+    type: JenkinsPipeline

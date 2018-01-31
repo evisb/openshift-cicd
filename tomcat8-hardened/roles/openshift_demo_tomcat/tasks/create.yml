@@ -1,0 +1,68 @@
+- name: Check existing projects
+  shell: oc get projects | awk '{ print $1 }'
+  register: projects
+  changed_when: false
+
+- block:
+  - name: Create images-public project
+    shell: "oc new-project images-public --description='Project to host images and build the workloads'"
+
+  - name: Provide image-puller rights on images-public project to all authenticated accounts
+    shell: oc policy add-role-to-group system:image-puller system:authenticated --namespace=images-public
+
+  - name: Provide registry-viewer rights on images-public project to all autheticated accounts
+    shell: oc policy add-role-to-group registry-viewer system:authenticated --namespace=images-public
+
+  - name: Provide registry-viewer rights on images-public project to all autheticated accounts
+    shell: oc policy add-role-to-group view system:authenticated --namespace=images-public
+
+
+  # --- Create service account and secrets based on tls certificates for the web-chat app in the images-public project
+  - name: Create service account jws-service-account
+    shell: oc create sa jws-service-account -n images-public
+
+  - name: Add build admin role to service account jws-service-account
+    shell: oc policy add-role-to-user admin system:serviceaccount:images-public:jws-service-account
+
+  - name: Create secret based on keys
+    shell: oc create secret tls jws-app-secret --cert=roles/openshift_demo_tomcat/certs/tls.crt --key=roles/openshift_demo_tomcat/certs/tls.key
+  when: mode=="create" and 'images-public' not in projects.stdout_lines
+
+- name: Reset images-public project to a clean state
+  shell: oc delete all --all -n images-public
+  when: "'images-public' in projects.stdout_lines"
+
+- name: Build custom image and push it to the internal OCP registry
+  docker_image:
+    path: ./
+    name: "{{ ocp_ext_docker_registry }}/images-public/tomcat8-openshift-hardened"
+    tag: latest
+    nocache: yes
+    force: yes
+    rm: yes
+    push: yes
+
+# --- Create Template hardened tomcat8 in namespace openshift:
+- name: Check existing templates
+  shell: oc get templates -n openshift | awk '{ print $1 }'
+  register: templates
+  changed_when: false
+
+- name: Remove existing template in the openshift namespace
+  shell: oc delete template jboss-webserver30-tomcat8-openshift-hardened -n openshift
+  when: "'jboss-webserver30-tomcat8-openshift-hardened' in templates.stdout_lines"
+
+- name: Prepare hardened tomcat8 template
+  template: src=hardened-tomcat-template.yml.j2 dest=/tmp/hardened-tomcat-template.yml
+
+- name: Create hardened tomcat8 template in openshift namespace
+  shell: "oc create -f /tmp/hardened-tomcat-template.yml -n openshift"
+
+# --- Deploy the web-chat app based on the template in the images-public namespace:
+#- name: Doing deployment of web-chat app
+#  shell: "oc new-app --template jboss-webserver30-tomcat8-openshift-hardened -n images-public --labels=cleaninstall=true"
+
+# --- Clean app on hardened tomcat
+#- name: Removing deployment of web-chat app on hardened tomcat
+#  shell: "oc delete all -l cleaninstall -n images-public"
+#  when: mode=="reset"

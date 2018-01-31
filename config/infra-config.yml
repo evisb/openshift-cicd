@@ -1,0 +1,5 @@
+base_dns: "your-base-cluster-dns"
+ocp_openshift_dns_domain: "openshift.{{ base_dns }}"
+ocp_ext_docker_registry: "docker-registry-default.apps.{ base_dns }}"
+ocp_apps_dns_domain: "apps.{{ base_dns }}"
+ocp_token: "own-ocp-login-token"

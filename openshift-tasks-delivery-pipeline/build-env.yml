@@ -1,0 +1,11 @@
+---
+- hosts: localhost
+  gather_facts: false
+  tasks:
+      # disable login to cluster and registry if login will to happen manually
+      - name: Log in to OCP cluster
+        shell: oc login --token={{ ocp_token }} --server=https://{{ ocp_openshift_dns_domain }}
+- hosts: localhost
+  gather_facts: false
+  roles:
+    - { role: openshift_demo_tasksapp, tags: ['ose3-demo-tasks'], mode: create }

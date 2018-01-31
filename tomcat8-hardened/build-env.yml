@@ -1,0 +1,14 @@
+---
+- hosts: localhost
+  gather_facts: false
+  tasks: 
+      # disable login to cluster and registry if login will to happen manually
+      - name: Log in to OCP cluster
+        shell: oc login --token={{ ocp_token }} --server=https://{{ ocp_openshift_dns_domain }}
+      - name: Log in to registry
+        shell: docker login -u $(oc whoami) -p $(oc whoami -t) https://{{ ocp_ext_docker_registry }} 
+  
+- hosts: localhost
+  gather_facts: false
+  roles:
+    - { role: openshift_demo_tomcat, tags: ['ose3-hardened-tomcat'], mode: create }

@@ -1,0 +1,17 @@
+- hosts: localhost 
+  # Updates to Docker image will trigger a whole build/push process to happen for the images and OCP templates based on those images
+  tasks:
+      # disable login to cluster and registry if login will to happen manually
+      - name: Log in to OCP cluster
+        shell: oc login --token={{ ocp_token }} --server=https://{{ ocp_openshift_dns_domain }}
+      - name: Log in to registry
+        shell: docker login -u $(oc whoami) -p $(oc whoami -t) https://{{ ocp_ext_docker_registry }}
+      - name: Build custom image and push it to the private repo
+        docker_image:
+          path: ./
+          name: "{{ ocp_ext_docker_registry }}/images-public/tomcat8-openshift-hardened"
+          tag: latest
+          nocache: yes
+          force: yes
+          rm: yes
+          push: yes

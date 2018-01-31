@@ -1,0 +1,37 @@
+- name: Reset EAP app artifacts in the images-public project to a clean state
+  shell: oc delete all -l eapcleaninstall -n images-public
+
+- name: Build custom image and push it to the internal OCP registry
+  docker_image:
+    path: ./
+    name: "{{ ocp_ext_docker_registry }}/images-public/eap64-openshift-hardened"
+    tag: latest
+    nocache: yes
+    force: yes
+    rm: yes
+    push: yes
+
+# --- Create Template hardened eap64 in namespace openshift:
+- name: Check existing templates
+  shell: oc get templates -n openshift | awk '{ print $1 }'
+  register: templates
+  changed_when: false
+
+- name: Remove existing template in the openshift namespace
+  shell: oc delete template eap64-openshift-hardened -n openshift
+  when: "'eap64-openshift-hardened' in templates.stdout_lines"  
+
+- name: Prepare hardened eap64 template
+  template: src=hardened-eap64-template.yml.j2 dest=/tmp/hardened-eap64-template.yml
+
+- name: Create hardened eap64 template in openshift namespace
+  shell: "oc create -f /tmp/hardened-eap64-template.yml -n openshift"
+
+# --- Deploy an app based on the template in the images-public namespace:
+#- name: Doing deployment of an app based on eap64 server
+#  shell: "oc new-app --template eap64-openshift-hardened -n images-public --labels=eapcleaninstall=true"
+
+# --- Clean app on hardened eap64
+#- name: Removing deployment on hardened eap
+#  shell: "oc delete all -l eapcleaninstall -n images-public"
+#  when: mode=="reset"

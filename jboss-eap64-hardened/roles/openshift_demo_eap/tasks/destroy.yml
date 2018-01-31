@@ -1,0 +1,7 @@
+- name: delete project images-public
+  shell: oc delete project images-public
+  ignore_errors: true
+
+- name: delete template eap64-openshift-hardened
+  shell: oc delete template eap64-openshift-hardened -n openshift
+  ignore_errors: true
