@@ -8,10 +8,10 @@ items:
     source:
       type: "Git"
       git:
-        uri: "https://github.com/evisb/openshift-tasks"
+        uri: "https://github.com/evisb/openshift-samples-repo"
     strategy:
       type: "JenkinsPipeline"
       jenkinsPipelineStrategy:
-        jenkinsfilePath: Jenkinsfile
+        jenkinsfilePath: openshift-tasks/Jenkinsfile
 kind: List
 metadata: []
