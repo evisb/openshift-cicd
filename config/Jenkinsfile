@@ -1,0 +1,104 @@
+node {
+    
+
+	def JOB_BRANCH_NAME
+      
+	// FEATURE_BRANCH variable is set when using the job
+	// otherwise this job was started from the job
+	// accessing a not defined property would result in the exception caught below
+	try {
+		// set the JOB_BRANCH_NAME variable which will be used later independent of type of job
+		// since the suffix "origin" only appears in this job, remove it to align with multibranch job
+		JOB_BRANCH_NAME = FEATURE_BRANCH.replace("origin/", "") 
+		// for the , we build multiple branches in the same workspace, hence the need to remove any residuals from previous builds
+		deleteDir()
+		checkout([$class: 'GitSCM', branches: [[name: FEATURE_BRANCH ]], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'xxxxxx', url: 'https://bitbucket.test.com/scm/zlf/ratingserver.git']]])	
+	}
+	catch(MissingPropertyException e) { 
+		// we should only land here if this jenkinsfile was called from the multibranch job
+		// in the multibranch job, the variable BRANCH_NAME is automatically set by scm
+		JOB_BRANCH_NAME = BRANCH_NAME
+		checkout scm
+	}
+   
+   
+	// project suffix is used to build project name for sonarqube
+	// (to allow tracking of sonarqube statistics for different branches)
+	// but '/' is not allowed in procect name, hence the need to replace it
+	def PROJECT_SUFFIX = JOB_BRANCH_NAME.replace("/", "-") 
+   
+	def GRADLE_BUILD_TASKS = "build"
+	def MAVEN_BUILD_ARGS = ""
+   
+	// when building feature or develop branches, allow build to progress
+	if (JOB_BRANCH_NAME == "develop" || JOB_BRANCH_NAME.startsWith("feature") ) {
+	   MAVEN_BUILD_ARGS = " --fail-never"
+	}
+   
+	// when building the master build, upload resulting build to nexus snapshot repo
+	if (JOB_BRANCH_NAME == "master") {
+	   GRADLE_BUILD_TASKS = GRADLE_BUILD_TASKS + " uploadArchives"
+	}
+   
+	// when building the release build, upload resulting build to nexus release repo
+	if (JOB_BRANCH_NAME == "release") {
+	   GRADLE_BUILD_TASKS = GRADLE_BUILD_TASKS + "release"
+	}    
+   
+   
+   stage('Maven Build') {
+       withMaven(
+			// use Maven installation as declared in the Jenkins "Global Tool Configuration"
+            maven: 'MyMaven',
+			// use Maven settings file as declared in Jenkins "Managed Files"
+            mavenSettingsConfig: 'd070777c-f6ab-4d8c-83e1-96dc99694706',
+			// use local repository within the build job workspace
+            mavenLocalRepo: '.repository') {
+
+                // Run the maven build but keep building even if a component failed 
+				// (to still run tests on other components)
+                sh "mvn test compile package ${MAVEN_BUILD_ARGS}"
+
+            }
+   }
+   stage('Static Code Analysis') {
+	// use Sonar Scanner installation as declared in Jenkins "Global Tool Configuration"
+    def scannerHome = tool 'sonar';
+	// use Sonar Server as declared in Jenkins "Global System Configuration"
+    withSonarQubeEnv('Sonar') {
+		// use Sonar properties file as defined in Jenkins "Managed Files"
+        configFileProvider([configFile(fileId: 'f6cc7864-8d57-402e-9c1c-03c3ef3e6829', variable: 'SONAR_PROPERTIES')]) {
+			// use project suffix to create separate sonarqube results for each branch
+            sh "${scannerHome}/bin/sonar-scanner -Dproject.settings=$SONAR_PROPERTIES -Dsonar.projectKey=topse-${PROJECT_SUFFIX} -Dsonar.projectName=RatingServer-${PROJECT_SUFFIX}"
+        }
+    }
+   }
+   stage('Package and Deploy') {
+        
+		// provide nodejs and npm as defined in Jenkins "Global Tool Configuration" with settings defined in "Managed Files"
+        nodejs(configId: '6f1f8c52-4fee-4f8d-b9cb-e056111ffe09', nodeJSInstallationName: 'nodejs9') {
+			// use gradle init as defined in Jenkins "Managed Files"
+            configFileProvider([configFile(fileId: 'ad718e11-8cbb-471c-a995-4d2dde3969ad', variable: 'INIT_GRADLE')]) {
+				// use gradle installation as defined in Jenkins "Global Tool Configuration"
+                env.GRADLE_HOME="${tool 'gradle'}"
+                env.PATH="${env.GRADLE_HOME}/bin:${env.PATH}"
+				// use configured proxy and gradle build tasks defined at the top depending on branch name
+                sh "gradle -b build.gradle --init-script $INIT_GRADLE \
+                    -Dhttp.proxyHost=proxy \
+                    -Dhttp.proxyPort=3130 \
+                    -Dhttps.proxyHost=proxy \
+                    -Dhttps.proxyPort=3130 \
+                    -Dhttp.nonProxyHosts=*.test.test.com \
+                    -Dhttps.nonProxyHosts=*.test.test.com \
+                    $GRADLE_BUILD_TASKS"
+                    
+            }
+        }
+   }
+   stage('Results') {
+		// process test reports
+		junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
+		// archive artefacts
+		archive '**/target/*.jar'
+   }
+}
